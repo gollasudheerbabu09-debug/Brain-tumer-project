@@ -1,0 +1,8 @@
+archive/
+archive.zip
+*.ipynb
+.ipynb_checkpoints/
+.git/
+README.md
+__pycache__/
+*.pyc

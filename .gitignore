@@ -1,0 +1,8 @@
+archive/
+archive.zip
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+*.tsv
