@@ -1,5 +1,5 @@
-"""
-Brain Tumor MRI Classifier — Streamlit app
+﻿"""
+Brain Tumor MRI Classifier â€” Streamlit app
 Serves a fine-tuned ViT-B/16 (default, exported from PyTorch to ONNX), ResNet50,
 VGG16, and a Vision Transformer built from scratch.
 """
@@ -128,7 +128,7 @@ def load_onnx_vit(path):
 
 # Each model must get exactly the preprocessing it was trained with
 MODELS = {
-    "ViT-B/16 (pretrained)": {
+    "ViT-B/16": {
         "path": "vit_b16.onnx",
         "loader": load_onnx_vit,
         "preprocess": lambda x: (x / 255.0 - VIT_MEAN) / VIT_STD,
@@ -152,11 +152,11 @@ MODELS = {
     },
 }
 
-st.set_page_config(page_title="Brain Tumor MRI Classifier", page_icon="🧠", layout="centered")
+st.set_page_config(page_title="Brain Tumor MRI Classifier", page_icon="ðŸ§ ", layout="centered")
 
 
 # max_entries=1: only one model in memory at a time (fits free hosting RAM limits)
-@st.cache_resource(show_spinner="Loading model…", max_entries=1)
+@st.cache_resource(show_spinner="Loading modelâ€¦", max_entries=1)
 def load_model(name: str):
     cfg = MODELS[name]
     return cfg["loader"](cfg["path"])
@@ -194,7 +194,7 @@ cfg = available[model_name]
 model = load_model(model_name)
 
 # ---------------- Main ----------------
-st.title("🧠 Brain Tumor MRI Classifier")
+st.title("ðŸ§  Brain Tumor MRI Classifier")
 st.write("Upload a brain MRI scan and the model will predict the tumor type.")
 
 uploaded = st.file_uploader("Choose an MRI image", type=["jpg", "jpeg", "png"])
@@ -210,7 +210,7 @@ if uploaded is not None:
     with col_img:
         st.image(image, caption="Uploaded scan", width="stretch")
 
-    with st.spinner("Analyzing…"):
+    with st.spinner("Analyzingâ€¦"):
         probs = model.predict(
             prepare_image(image, cfg), verbose=0
         )[0]
@@ -227,7 +227,7 @@ if uploaded is not None:
             st.warning(f"**{label}**")
         st.metric("Confidence", f"{confidence:.1%}")
         if confidence < 0.6:
-            st.info("Low confidence — the model is unsure about this image.")
+            st.info("Low confidence â€” the model is unsure about this image.")
 
     st.subheader("Class probabilities")
     for i in np.argsort(probs)[::-1]:
@@ -236,6 +236,6 @@ if uploaded is not None:
 
 st.markdown("---")
 st.caption(
-    "⚠️ For research and educational purposes only. "
+    "âš ï¸ For research and educational purposes only. "
     "This is not a medical device and must not be used for clinical diagnosis."
 )
