@@ -6,14 +6,23 @@
 
 Multi-class classification of brain MRI scans into **glioma**, **meningioma**, **pituitary tumor**, and **no tumor**. Four architectures — **ViT-B/16**, **ResNet50**, **VGG16**, and a **Vision Transformer built from scratch** — are trained and evaluated on the same held-out test set, and the models are served in a Streamlit web app that is also packaged with Docker.
 
+
+
+
+
+https://github.com/user-attachments/assets/0b23abe8-1b12-41bd-876a-79395b7af76b
+
+
 ---
 
 ## Highlights
 
-- Fine-tuned a pretrained **Vision Transformer (ViT-B/16)** to **95.13% test accuracy** on 1,600 held-out MRI scans, outperforming ResNet50 (93.50%) and VGG16 (92.63%).
+- Fine-tuned a pretrained **Vision Transformer ResNet50** to **98.13% test accuracy** on 1,600 held-out MRI scans, outperforming (ViT-B/16) (95.50%) and VGG16 (95.63%).
 - Diagnosed a silent weight-loading failure in the first ViT run (every backbone weight was reported `MISSING`, so the model trained from random initialization and reached only 57%); switching to `timm` so the pretrained weights actually loaded raised accuracy to 95.13%.
 - Exported the ViT from PyTorch to **ONNX with int8 quantization**, shrinking it from 343 MB to 87 MB with no measured accuracy loss, so it runs alongside the TensorFlow models within free-tier hosting limits.
 - Deployed all models in a **Streamlit** app with model selection and per-class confidence scores, containerized with **Docker** and hosted on Streamlit Community Cloud.
+
+
 
 ---
 
