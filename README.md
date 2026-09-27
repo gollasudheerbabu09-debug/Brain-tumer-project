@@ -16,6 +16,15 @@ Multi-class classification of brain MRI scans into **glioma**, **meningioma**, *
 
 
 
+
+
+
+
+https://github.com/user-attachments/assets/1900cf8e-64fd-44dd-8f11-d5c0927c489d
+
+
+
+
 ## Dataset
 
 **Brain Tumor MRI Dataset** — [masoudnickparvar/brain-tumor-mri-dataset](https://www.kaggle.com/datasets/masoudnickparvar/brain-tumor-mri-dataset) (Kaggle)
