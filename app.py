@@ -1,8 +1,11 @@
-﻿"""
-Brain Tumor MRI Classifier â€” Streamlit app
+"""
+Brain Tumor MRI Classifier — Streamlit app
 Serves a fine-tuned ViT-B/16 (default, exported from PyTorch to ONNX), ResNet50,
 VGG16, and a Vision Transformer built from scratch.
 """
+import base64
+import html
+import io
 import os
 
 import numpy as np
@@ -152,11 +155,19 @@ MODELS = {
     },
 }
 
-st.set_page_config(page_title="Brain Tumor MRI Classifier", page_icon="ðŸ§ ", layout="centered")
+st.set_page_config(page_title="Brain MRI Tumor Classifier", page_icon="🧠", layout="wide")
+
+SAMPLE_DIR = "samples"
+CLASS_COLORS = {
+    "glioma": "#B04A3A",
+    "meningioma": "#B9862A",
+    "notumor": "#3D8669",
+    "pituitary": "#6656A0",
+}
 
 
 # max_entries=1: only one model in memory at a time (fits free hosting RAM limits)
-@st.cache_resource(show_spinner="Loading modelâ€¦", max_entries=1)
+@st.cache_resource(show_spinner="Loading model…", max_entries=1)
 def load_model(name: str):
     cfg = MODELS[name]
     return cfg["loader"](cfg["path"])
@@ -175,67 +186,232 @@ def prepare_image(img: Image.Image, cfg: dict) -> np.ndarray:
     return np.expand_dims(arr, axis=0)
 
 
-# ---------------- Sidebar ----------------
+def list_samples():
+    """Sample scans named <class>_<n>.jpg, e.g. glioma_1.jpg."""
+    if not os.path.isdir(SAMPLE_DIR):
+        return []
+    files = sorted(f for f in os.listdir(SAMPLE_DIR) if f.lower().endswith((".jpg", ".jpeg", ".png")))
+    samples = []
+    for f in files:
+        cls = f.split("_")[0].lower()
+        samples.append({"path": os.path.join(SAMPLE_DIR, f), "true": cls if cls in CLASS_NAMES else None})
+    return samples
+
+
+def to_data_uri(img: Image.Image, size=560) -> str:
+    img = img.convert("RGB")
+    img.thumbnail((size, size))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=88)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+# ---------------- Styles ----------------
+st.markdown(
+    """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+html, body, [class*="st-"], .stMarkdown, button, input { font-family: 'Public Sans', system-ui, sans-serif; }
+.block-container { max-width: 1120px; padding-top: 2.2rem; padding-bottom: 3rem; }
+h1, h2, h3 { font-family: 'Public Sans', system-ui, sans-serif; letter-spacing: -0.01em; }
+
+.page-title { font-size: 2.1rem; font-weight: 700; line-height: 1.15; margin: 0 0 .35rem 0; }
+.page-lede { font-size: 1.02rem; opacity: .75; max-width: 62ch; margin: 0 0 1.4rem 0; line-height: 1.55; }
+
+/* The light box: the scan shown the way it would be on a reading-room monitor */
+.lightbox {
+  position: relative; background: #0A1014; border-radius: 6px; overflow: hidden;
+  aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 0 0 1px #24323B;
+}
+.lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.overlay {
+  position: absolute; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: .78rem;
+  color: #D7E3EA; line-height: 1.45; text-shadow: 0 1px 2px rgba(0,0,0,.9); pointer-events: none;
+}
+.overlay.tl { top: 12px; left: 14px; }
+.overlay.tr { top: 12px; right: 14px; text-align: right; }
+.overlay.bl { bottom: 12px; left: 14px; font-size: .95rem; color: #FFFFFF; }
+.overlay .dot { display: inline-block; width: .6em; height: .6em; border-radius: 50%; margin-right: .45em; vertical-align: .05em; }
+
+/* Result panel */
+.verdict-label { font-size: .9rem; opacity: .65; margin-bottom: .1rem; }
+.verdict { font-size: 2.3rem; font-weight: 700; line-height: 1.1; margin-bottom: .2rem; }
+.verdict-conf { font-size: 1.05rem; opacity: .8; margin-bottom: 1.1rem; }
+.truth { font-size: .92rem; padding: .55rem .75rem; border-radius: 6px; margin-bottom: 1.1rem; }
+.truth.ok { background: rgba(61,134,105,.12); color: #2C6B52; }
+.truth.miss { background: rgba(176,74,58,.12); color: #8E3A2D; }
+.prob-row { display: grid; grid-template-columns: 9.5rem 1fr 3.6rem; align-items: center; gap: .75rem; margin: .55rem 0; font-size: .95rem; }
+.prob-track { height: 10px; background: rgba(127,140,150,.18); border-radius: 5px; overflow: hidden; }
+.prob-fill { height: 100%; border-radius: 5px; }
+.prob-pct { text-align: right; font-variant-numeric: tabular-nums; opacity: .85; }
+.prob-row.top { font-weight: 600; }
+
+.section-title { font-size: 1.25rem; font-weight: 650; margin: 2.2rem 0 .25rem 0; }
+.section-note { font-size: .93rem; opacity: .7; margin: 0 0 1rem 0; }
+.sample-caption { font-size: .85rem; opacity: .75; margin: .25rem 0 .35rem 0; }
+.footer-note { font-size: .82rem; opacity: .6; margin-top: 2.5rem; max-width: 70ch; }
+
+@media (max-width: 640px) {
+  .page-title { font-size: 1.6rem; }
+  .verdict { font-size: 1.8rem; }
+  .prob-row { grid-template-columns: 7.5rem 1fr 3.2rem; font-size: .88rem; }
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# ---------------- Models ----------------
 available = {name: cfg for name, cfg in MODELS.items() if os.path.exists(cfg["path"])}
+if not available:
+    st.error("No model files found. Put the model files next to app.py, then restart the app.")
+    st.stop()
 
-with st.sidebar:
-    st.header("Settings")
-    if not available:
-        st.error("No model files found. Put the .keras files next to app.py.")
-        st.stop()
-    model_name = st.selectbox("Model", list(available.keys()))
-    st.markdown("---")
-    st.caption(
-        "Trained on the Kaggle *Brain Tumor MRI Dataset* "
-        "(glioma, meningioma, pituitary, no tumor)."
-    )
+samples = list_samples()
 
+# Which scan is being shown: a sample (by path) or the uploaded file
+if "source" not in st.session_state:
+    st.session_state.source = ("sample", samples[0]["path"]) if samples else None
+
+
+def use_upload():
+    if st.session_state.get("uploader") is not None:
+        st.session_state.source = ("upload", None)
+
+
+def use_sample(path):
+    st.session_state.source = ("sample", path)
+
+
+# ---------------- Header ----------------
+st.markdown('<div class="page-title">Brain MRI tumor classifier</div>', unsafe_allow_html=True)
+st.markdown(
+    '<p class="page-lede">Pick a sample scan below or upload your own. The model sorts it into '
+    "glioma, meningioma, pituitary tumor, or no tumor, and shows how confident it is in each.</p>",
+    unsafe_allow_html=True,
+)
+
+model_name = st.radio("Model", list(available.keys()), horizontal=True)
 cfg = available[model_name]
 model = load_model(model_name)
 
-# ---------------- Main ----------------
-st.title("ðŸ§  Brain Tumor MRI Classifier")
-st.write("Upload a brain MRI scan and the model will predict the tumor type.")
-
-uploaded = st.file_uploader("Choose an MRI image", type=["jpg", "jpeg", "png"])
-
-if uploaded is not None:
+# ---------------- Current scan ----------------
+image, true_cls, source_text = None, None, ""
+src = st.session_state.source
+if src and src[0] == "upload" and st.session_state.get("uploader") is not None:
     try:
-        image = Image.open(uploaded)
+        image = Image.open(st.session_state.uploader)
+        source_text = "Your upload"
     except Exception:
-        st.error("Could not read that file as an image.")
-        st.stop()
+        st.error("That file isn't a readable image. Upload a JPG or PNG scan.")
+elif samples:
+    # A sample is selected, or an upload was removed: show a sample
+    path = src[1] if src and src[0] == "sample" and os.path.exists(src[1]) else samples[0]["path"]
+    st.session_state.source = ("sample", path)
+    src = st.session_state.source
+    image = Image.open(path)
+    true_cls = next((s["true"] for s in samples if s["path"] == path), None)
+    source_text = "Sample scan"
 
-    col_img, col_res = st.columns([1, 1])
-    with col_img:
-        st.image(image, caption="Uploaded scan", width="stretch")
+if image is None:
+    st.info("Upload an MRI scan below to see a prediction.")
+else:
+    with st.spinner("Reading the scan…"):
+        probs = model.predict(prepare_image(image, cfg), verbose=0)[0]
+    order = np.argsort(probs)[::-1]
+    top = CLASS_NAMES[int(order[0])]
+    conf = float(probs[order[0]])
 
-    with st.spinner("Analyzingâ€¦"):
-        probs = model.predict(
-            prepare_image(image, cfg), verbose=0
-        )[0]
+    col_scan, col_result = st.columns([1.05, 1], gap="large")
 
-    top = int(np.argmax(probs))
-    label = DISPLAY_NAMES[CLASS_NAMES[top]]
-    confidence = float(probs[top])
+    with col_scan:
+        st.markdown(
+            f"""
+<div class="lightbox">
+  <img src="{to_data_uri(image)}" alt="MRI scan being classified">
+  <div class="overlay tl">{html.escape(source_text)}</div>
+  <div class="overlay tr">{html.escape(model_name)}</div>
+  <div class="overlay bl"><span class="dot" style="background:{CLASS_COLORS[top]}"></span>{DISPLAY_NAMES[top]} {conf:.1%}</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
 
-    with col_res:
-        st.subheader("Prediction")
-        if CLASS_NAMES[top] == "notumor":
-            st.success(f"**{label}**")
-        else:
-            st.warning(f"**{label}**")
-        st.metric("Confidence", f"{confidence:.1%}")
-        if confidence < 0.6:
-            st.info("Low confidence â€” the model is unsure about this image.")
+    with col_result:
+        st.markdown('<div class="verdict-label">Prediction</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="verdict" style="color:{CLASS_COLORS[top]}">{DISPLAY_NAMES[top]}</div>'
+            f'<div class="verdict-conf">{conf:.1%} confidence</div>',
+            unsafe_allow_html=True,
+        )
+        if true_cls:
+            if true_cls == top:
+                st.markdown(
+                    f'<div class="truth ok">Correct. This sample is labelled {DISPLAY_NAMES[true_cls]}.</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div class="truth miss">Missed. This sample is labelled {DISPLAY_NAMES[true_cls]}.</div>',
+                    unsafe_allow_html=True,
+                )
+        rows = []
+        for i in order:
+            c = CLASS_NAMES[int(i)]
+            p = float(probs[i])
+            rows.append(
+                f'<div class="prob-row{" top" if c == top else ""}">'
+                f"<span>{DISPLAY_NAMES[c]}</span>"
+                f'<div class="prob-track"><div class="prob-fill" style="width:{p*100:.1f}%;background:{CLASS_COLORS[c]}"></div></div>'
+                f'<span class="prob-pct">{p:.1%}</span></div>'
+            )
+        st.markdown("".join(rows), unsafe_allow_html=True)
+        if conf < 0.6:
+            st.markdown(
+                '<p class="section-note" style="margin-top:1rem">The model is unsure about this scan. '
+                "Try another model or a clearer image.</p>",
+                unsafe_allow_html=True,
+            )
 
-    st.subheader("Class probabilities")
-    for i in np.argsort(probs)[::-1]:
-        st.write(f"{DISPLAY_NAMES[CLASS_NAMES[i]]}: {probs[i]:.1%}")
-        st.progress(float(probs[i]))
+# ---------------- Upload ----------------
+st.markdown('<div class="section-title">Upload your own scan</div>', unsafe_allow_html=True)
+st.file_uploader(
+    "Drag a JPG or PNG here from your computer, or click to browse",
+    type=["jpg", "jpeg", "png"],
+    key="uploader",
+    on_change=use_upload,
+)
 
-st.markdown("---")
-st.caption(
-    "âš ï¸ For research and educational purposes only. "
-    "This is not a medical device and must not be used for clinical diagnosis."
+# ---------------- Sample gallery ----------------
+if samples:
+    st.markdown('<div class="section-title">Try a sample scan</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="section-note">These come from the held-out test set, so the models never saw them '
+        "during training. Each one is labelled with its true class.</p>",
+        unsafe_allow_html=True,
+    )
+    current = src[1] if src and src[0] == "sample" else None
+    per_row = 4
+    for start in range(0, len(samples), per_row):
+        cols = st.columns(per_row, gap="medium")
+        for col, smp in zip(cols, samples[start:start + per_row]):
+            with col:
+                st.image(smp["path"], width="stretch")
+                label = DISPLAY_NAMES.get(smp["true"], "Unlabelled") if smp["true"] else "Unlabelled"
+                st.markdown(f'<div class="sample-caption">{label}</div>', unsafe_allow_html=True)
+                is_current = smp["path"] == current
+                st.button(
+                    "Showing" if is_current else "Classify this scan",
+                    key=f"btn_{smp['path']}",
+                    on_click=use_sample,
+                    args=(smp["path"],),
+                    disabled=is_current,
+                )
+
+st.markdown(
+    '<p class="footer-note">For research and education only. This is not a medical device and must not '
+    "be used for diagnosis.</p>",
+    unsafe_allow_html=True,
 )
